@@ -1,0 +1,153 @@
+The following SQL queries are associated with the exploratory analysis done on the COVID dataset. I used Google BigQuery for doing the project. 
+The datasets I used were downloaded from the following website: https://ourworldindata.org/covid-deaths
+
+
+
+
+
+
+
+
+-- Select data that we are going to use
+
+SELECT location, date, total_cases, new_cases, total_deaths, population 
+FROM `qualified-sum-396110.covid.covid_deaths`
+order by 1,2
+
+-- Looking at Total Cases vs Total Deaths
+-- Showing likelihood of dying if you get covid in your country
+
+SELECT location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 as DeathPercentage
+from `qualified-sum-396110.covid.covid_deaths`
+where location like '%many'
+order by date
+
+-- Looking at Total cases vs Population
+
+Select location, date, total_cases, population, (total_cases/population)*100 as CasePercentage
+From `qualified-sum-396110.covid.covid_deaths`
+Where location = 'Germany'
+Order by 1,2
+
+-- Looking at countries with highest infection rate compared to population
+
+Select location, Max(total_cases*100/population) as CasePercentage
+From `qualified-sum-396110.covid.covid_deaths`
+GROUP BY location
+Order by CasePercentage DESC
+
+or
+
+Select location, population, MAX(total_cases) as HighestInfectionCount, Max((total_cases/population))*100 as PercentPopulationInfected
+From `qualified-sum-396110.covid.covid_deaths`
+GROUP BY location, population
+Order by PercentPopulationInfected DESC
+
+-- Showing countries with highest death count per population
+
+Select location, Max(total_deaths*100/population) as DeathPercentage
+From `qualified-sum-396110.covid.covid_deaths`
+GROUP BY location
+Order by DeathPercentage DESC
+
+or
+
+Select location, population, MAX(total_deaths) as HighestDeathCount, Max((total_deaths/population))*100 as PercentPopulationDied
+From `qualified-sum-396110.covid.covid_deaths`
+Where continent is not null
+GROUP BY location, population
+Order by PercentPopulationDied DESC
+
+-- Lets have a look at everything on continent scale
+
+Select continent, Max(population) as MaxPopulation, MAX(total_deaths) as HighestDeathCount, Max((total_deaths/population))*100 as PercentPopulationDied
+From `qualified-sum-396110.covid.covid_deaths`
+Where continent is not null
+GROUP BY continent
+Order by PercentPopulationDied DESC
+
+-- Global numbers; how the number of new cases and new deaths change over time on a global scale
+
+SELECT date, sum(new_cases) as TotalCase, sum(new_deaths) as TotalDeath, (sum(new_deaths)/sum(new_cases))*100 as DeathPerCase
+From `qualified-sum-396110.covid.covid_deaths`
+Where continent is not null and new_cases>0
+Group by date 
+order by 1
+
+-- Beginning of JOIN statements
+
+Select *
+FROM qualified-sum-396110.covid.covid_deaths dth
+JOIN qualified-sum-396110.covid.covid_vaccinations vac
+  ON dth.location = vac.location
+  and dth.date = vac.date
+order by 3
+
+-- Looking at Total population who got vaccinated
+
+Select dth.continent, dth.location, dth.date, dth.population, vac.new_vaccinations
+FROM qualified-sum-396110.covid.covid_deaths dth
+JOIN qualified-sum-396110.covid.covid_vaccinations vac
+    on dth.location = vac.location
+    and dth.date = vac.date
+Where dth.continent is not null and dth.location = 'Canada'
+ORDER BY 2,3
+
+-- Looking at Total Population vs Vaccinations
+
+SELECT 
+  dth.continent, dth.location, dth.date, dth.population, vac.new_vaccinations, sum(vac.new_vaccinations) over (partition by dth.location order by dth.location, dth.date) as CollectiveDailyVaccinated
+FROM qualified-sum-396110.covid.covid_deaths dth
+Join qualified-sum-396110.covid.covid_vaccinations vac
+  on dth.location = vac.location
+  and dth.date = vac.date
+Where dth.continent is not null and dth.location = 'Canada'
+Order by 2,3
+
+-- Using CTE
+
+With Pop_vs_Vac
+as
+(
+SELECT 
+  dth.continent, dth.location, dth.date, dth.population, vac.new_vaccinations, sum(vac.new_vaccinations) over (partition by dth.location order by dth.location, dth.date) as CollectiveDailyVaccinated
+  -- , (CollectiveDailyVaccinated/population)*100 (we can not use the column data we just created; for that we must use CTEs or temp tables)
+FROM qualified-sum-396110.covid.covid_deaths dth
+Join qualified-sum-396110.covid.covid_vaccinations vac
+  on dth.location = vac.location
+  and dth.date = vac.date
+Where dth.continent is not null
+Order by 2,3
+)
+Select *, (CollectiveDailyVaccinated/population)*100 as CollectiveDailyVaccinated_percentage
+From Pop_vs_Vac
+Where location = 'Canada'
+
+-- Creating the previous subset using TEMP tables 
+
+Drop Table if exists #Pop_vs_Vac
+CREATE TABLE #Pop_vs_Vac
+(
+Continent nvarchar(255),
+Location nvarchar(255),
+Date datetime,
+Population numeric,
+New_vaccinations numeric, 
+CollectiveDailyVaccinated numeric
+)
+
+INSERT INTO #Pop_vs_Vac
+SELECT 
+  dth.continent, dth.location, dth.date, dth.population, vac.new_vaccinations, sum(vac.new_vaccinations) over (partition by dth.location order by dth.location, dth.date) as CollectiveDailyVaccinated
+  -- , (CollectiveDailyVaccinated/population)*100 (we can not use the column data we just created; for that we must use CTEs or temp tables)
+FROM qualified-sum-396110.covid.covid_deaths dth
+Join qualified-sum-396110.covid.covid_vaccinations vac
+  on dth.location = vac.location
+  and dth.date = vac.date
+Where dth.continent is not null
+Order by 2,3
+)
+Select *, (CollectiveDailyVaccinated/population)*100 as CollectiveDailyVaccinated_percentage
+From #Pop_vs_Vac
+Where location = 'Canada'
+
