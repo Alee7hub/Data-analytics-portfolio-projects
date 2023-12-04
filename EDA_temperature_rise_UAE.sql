@@ -1,3 +1,10 @@
+The following queries go through the analysis I already did with Python on the global temperature rise. I did the following analysis by PostgreSQL.
+Among all those vulnerable places in terms of climate change, I chose UAE as an example. The same analysis can be conducted on other places as well.
+I used the dataset provided by Berkeley Earth on Kaggle. The license of this dataset can be found here: https://creativecommons.org/licenses/by-nc-sa/4.0/ 
+---------------------------------------------------------------------------------------------------------------------------
+
+
+
 /*
 Creating an empty table and then importing the contents of the main csv file to that table
 */
@@ -102,13 +109,6 @@ Where Country = 'United Arab Emirates' and Year >=1900
 Select Year, Round(avg(avg_temp), 1) as Avg, min(avg_temp) as min, max(avg_temp) as max
 From uae_temp
 Group by Year;
-
-
-
-Select * From global_temp_rise
-
-
-
 
 
 
